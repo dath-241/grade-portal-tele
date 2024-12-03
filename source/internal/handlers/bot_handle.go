@@ -75,19 +75,44 @@ func HandleClear(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 func HandleHistory(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+
 	response, err := services.GetHistory(update.Message.Chat.ID)
+
 	var msg tgbotapi.MessageConfig
+
 	if err != nil {
-		msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Không có lịch sử tra cứu nào.")
+		var response string
+		if strings.Contains(err.Error(), "no history found") {
+			response = "Không có lịch sử tra cứu."
+		} else if strings.Contains(err.Error(), "context deadline exceeded") {
+			response = "Lỗi kết nối cơ sở dữ liệu, thử lại sau."
+		} else {
+			response = "Lỗi không xác định, thử lại sau."
+		}
+
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+		msg.ParseMode = "MarkdownV2"
+		if _, sendErr := bot.Send(msg); sendErr != nil {
+			log.Printf("Lỗi khi gửi tin nhắn: %v", sendErr)
+		}
+		return
+	}
+
+	if len(*response) == 0 {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Không có lịch sử tra cứu.")
 		bot.Send(msg)
-	} else {
-		for _, course := range *response {
-			jsonStr, _ := json.Marshal(course)
-			fmt.Println(string(jsonStr))
-			msgText := fmt.Sprintf("```json\n%s\n```", string(jsonStr))
-			msg = tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
-			msg.ParseMode = "MarkdownV2"
-			bot.Send(msg)
+		return
+	}
+
+	for _, course := range *response {
+		jsonStr, _ := json.Marshal(course)
+		fmt.Println(string(jsonStr))
+		msgText := fmt.Sprintf("```json\n%s\n```", string(jsonStr))
+		msg = tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+		msg.ParseMode = "MarkdownV2"
+		if _, sendErr := bot.Send(msg); sendErr != nil {
+			log.Printf("Lỗi khi gửi tin nhắn: %v", sendErr)
 		}
 	}
+
 }
